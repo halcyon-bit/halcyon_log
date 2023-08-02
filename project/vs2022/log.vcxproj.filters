@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{37fca89b-b05b-47a6-a91d-22d75581a073}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{00bdbda4-8016-4b82-980b-9c55b5f49419}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\file_opt">
+      <UniqueIdentifier>{3e3f1159-1df6-4548-a893-6828e53e9e61}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\compress_opt">
+      <UniqueIdentifier>{0d47001e-2dcf-4792-990c-88b75a6df2c9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\log_file">
+      <UniqueIdentifier>{253c0208-07d0-4e40-bb16-5f4e57f50e64}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\async_logging.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\log\log_define.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\log\log_stream.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\include\log\logging.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\file_opt.h">
+      <Filter>src\file_opt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\compress_opt.h">
+      <Filter>src\compress_opt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\log_file.h">
+      <Filter>src\log_file</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\async_logging.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\log_stream.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\logging.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\file_opt.cpp">
+      <Filter>src\file_opt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\compress_opt.cpp">
+      <Filter>src\compress_opt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\log_file.cpp">
+      <Filter>src\log_file</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
