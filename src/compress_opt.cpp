@@ -11,7 +11,7 @@ using namespace halcyon;
 
 #ifdef USE_HALCYON_LZ4
 
-static bool lz4Compress(STRING_VIEW_NS string_view src, std::string& dst)
+static bool lz4Compress(HALCYON_STRING_VIEW_NS string_view src, std::string& dst)
 {
     int dst_size = LZ4_compressBound(static_cast<int>(src.size()));
     if (dst_size == 0) {
@@ -27,7 +27,7 @@ static bool lz4Compress(STRING_VIEW_NS string_view src, std::string& dst)
     return true;
 }
 
-static bool lz4Decompress(STRING_VIEW_NS string_view src, std::string& dst)
+static bool lz4Decompress(HALCYON_STRING_VIEW_NS string_view src, std::string& dst)
 {
     constexpr int kMaxDecompressedSize = 40960;
     dst.resize(kMaxDecompressedSize);
@@ -41,7 +41,7 @@ static bool lz4Decompress(STRING_VIEW_NS string_view src, std::string& dst)
 
 #elif defined USE_HALCYON_ZSTD
 
-static bool zstdCompress(STRING_VIEW_NS string_view src, std::string& dst)
+static bool zstdCompress(HALCYON_STRING_VIEW_NS string_view src, std::string& dst)
 {
     size_t dst_size = ZSTD_compressBound(src.size());
     if (1 == ZSTD_isError(dst_size)) {
@@ -57,7 +57,7 @@ static bool zstdCompress(STRING_VIEW_NS string_view src, std::string& dst)
     return true;
 }
 
-static bool zstdDecompress(STRING_VIEW_NS string_view src, std::string& dst)
+static bool zstdDecompress(HALCYON_STRING_VIEW_NS string_view src, std::string& dst)
 {
     size_t dst_size = ZSTD_getFrameContentSize(src.data(), src.size());
     if (1 == ZSTD_isError(dst_size)) {
@@ -77,23 +77,27 @@ static bool zstdDecompress(STRING_VIEW_NS string_view src, std::string& dst)
 
 LOG_BEGIN_NAMESPACE
 
-bool compress(STRING_VIEW_NS string_view src, std::string& dst)
+bool compress(HALCYON_STRING_VIEW_NS string_view src, std::string& dst)
 {
 #ifdef USE_HALCYON_LZ4
     return ::lz4Compress(src, dst);
 #elif defined USE_HALCYON_ZSTD
     return ::zstdCompress(src, dst);
 #else
+    dst = src.data();
+    return true;
 #endif
 }
 
-bool decompress(STRING_VIEW_NS string_view src, std::string& dst)
+bool decompress(HALCYON_STRING_VIEW_NS string_view src, std::string& dst)
 {
 #ifdef USE_HALCYON_LZ4
     return ::lz4Decompress(src, dst);
 #elif defined USE_HALCYON_ZSTD
     return ::zstdDecompress(src, dst);
 #else
+    dst = src.data();
+    return true;
 #endif
 }
 

@@ -1,36 +1,32 @@
 ﻿#include "log_file.h"
-#include "log_define.h"
-#include "base/common/platform.h"
-#include "base/utility/utility.h"
 
-#include <chrono>
+#include <base/file/file_opt.h>
+
+#include <log/fmt/chrono.h>
+
+#include <cstdio>
 #include <cassert>
-#include <filesystem>
+#include <chrono>
 
-// 最大日志文件大小（以MB为单位）,超过会对文件进行分割  FLAGS_max_log_size
-DECLARE_uint32(max_log_size);
-
-// 日志保存目录  FLAGS_log_dir
-DECLARE_string(log_dir);
-
-using namespace halcyon;
 using namespace halcyon::log;
 
-using std::chrono::system_clock;
-using std::chrono::time_point;
-using std::chrono::milliseconds;
+constexpr int kDayOfSeconds = 24 * 60 * 60;
 
-LogFile::LogFile(std::string_view filename)
+LogFile::LogFile(HALCYON_STRING_VIEW_NS string_view filename)
 {
-    if (!std::filesystem::exists(FLAGS_log_dir)) {
-        std::filesystem::create_directories(FLAGS_log_dir);
-    }
-
-    fp_ = ::fopen((FLAGS_log_dir + filename.data()).c_str(), "a");
+    written_bytes_ = 0;
+#ifdef WINDOWS
+    // 这样不会独占文件
+    fp_ = ::_fsopen(filename.data(), "wb", _SH_DENYNO);
     if (fp_ != nullptr) {
-        ::setbuf(fp_, buffer_);
+        ::setvbuf(fp_, buffer_, _IOFBF, sizeof(buffer_));
     }
-    writtenBytes_ = 0;
+#elif defined LINUX
+    fp_ = ::fopen(filename.data(), "wb");
+    if (fp_ != nullptr) {
+        ::setbuffer(fp_, buffer_, sizeof(buffer_));
+    }
+#endif
 }
 
 LogFile::~LogFile()
@@ -40,32 +36,38 @@ LogFile::~LogFile()
     }
 }
 
-void LogFile::append(const char* logline, const size_t len)
+void LogFile::append(HALCYON_STRING_VIEW_NS string_view logline)
 {
     if (fp_ == nullptr) {
         return;
     }
 
-    size_t written = 0;
-    while (written != len) {
-        size_t remain = len - written;
-        size_t n = write(logline, len);
-        if (n != remain) {
+    const char* start = logline.data();
+    const size_t len = logline.size();
+
+    size_t n = write(start, len);
+    size_t remain = len - n;
+    while (remain > 0) {
+        size_t x = write(start + n, remain);
+        if (x == 0) {
             int err = ferror(fp_);
-            if (err) {
+            if (err != 0)
                 break;
-            }
         }
-        written += n;
+        n += x;
+        remain -= x;
     }
-    writtenBytes_ += written;
+
+    written_bytes_ += len;
 }
 
 void LogFile::flush()
 {
-    if (fp_ != nullptr) {
-        ::fflush(fp_);
+    if (fp_ == nullptr) {
+        return;
     }
+
+    ::fflush(fp_);
 }
 
 size_t LogFile::write(const char* logline, size_t len)
@@ -79,32 +81,54 @@ size_t LogFile::write(const char* logline, size_t len)
 }
 
 
-
-LogFileManager::LogFileManager(const std::string& namePrefix, bool threadSafe)
-    : namePrefix_(namePrefix)
+LogFileManager::LogFileManager(HALCYON_STRING_VIEW_NS string_view dir, HALCYON_STRING_VIEW_NS string_view prefix,
+    size_t max_size, size_t max_file, size_t flush_interval, bool thread_safe)
+    : max_size_(max_size), max_file_(max_file)
+    , flush_interval_(flush_interval), thread_safe_(thread_safe)
 {
-    threadSafe_ = threadSafe;
+    prefix_.append(dir.data()).append("/");
+    prefix_.append(prefix.data());
 
-    assert(namePrefix.find('/') == std::string::npos);
+    if (!base::file::exists(dir.data())) {
+        base::file::createDir(dir.data());
+        cur_file_count_ = 0;
+    }
+    else {
+        std::vector<std::string> dirs;
+        std::vector<std::string> files;
+        base::file::listDir(dir.data(), dirs, files);
+
+        for (auto& each : files) {
+            if (each.find(prefix.data()) != std::string::npos) {
+                ++cur_file_count_;
+                std::string tmp;
+                tmp.reserve(128);
+                tmp.append(dir.data()).append("/");
+                tmp.append(std::move(each));
+                names_.push_back(std::move(tmp));
+            }
+        }
+    }
+
     rollFile();
 }
 
 LogFileManager::~LogFileManager() = default;
 
-void LogFileManager::append(const char* logline, size_t len)
+void LogFileManager::append(HALCYON_STRING_VIEW_NS string_view logline)
 {
-    if (threadSafe_) {
-        std::unique_lock<std::mutex> lock(mutex_);
-        append_unlocked(logline, len);
+    if (thread_safe_) {
+        std::unique_lock<std::mutex> locker(mutex_);
+        append_unlocked(logline);
     }
     else {
-        append_unlocked(logline, len);
+        append_unlocked(logline);
     }
 }
 
 void LogFileManager::flush()
 {
-    if (threadSafe_) {
+    if (thread_safe_) {
         std::unique_lock<std::mutex> lock(mutex_);
         file_->flush();
     }
@@ -115,37 +139,63 @@ void LogFileManager::flush()
 
 inline void LogFileManager::rollFile()
 {
-    std::string filename = getLogFileName();
+    time_t now = ::time(nullptr);
+    std::string filename = genLogFileName();
+
+    while (cur_file_count_ >= max_file_) {
+        // 删除多余文件
+        auto& name = names_.front();
+        base::file::removeFile(name);
+        names_.pop_front();
+        --cur_file_count_;
+    }
+
+    names_.push_back(filename);
+    ++cur_file_count_;
+
+    start_of_time_ = now / kDayOfSeconds * kDayOfSeconds;
+    last_flush_ = now;
+
     file_.reset(new LogFile(filename));
 }
 
-inline uint32_t LogFileManager::maxLogSize()
+inline size_t LogFileManager::maxLogSize()
 {
-    return (FLAGS_max_log_size > 0 && FLAGS_max_log_size < 4096 ? FLAGS_max_log_size : 1);
+    return (max_size_ > 0 && max_size_ < 4096) ? max_size_ : 1;
 }
 
-void LogFileManager::append_unlocked(const char* logline, const size_t len)
+void LogFileManager::append_unlocked(HALCYON_STRING_VIEW_NS string_view logline)
 {
-    if (file_->writtenBytes() >> 20U >= maxLogSize()) {
+    // 将信息写入缓冲区
+    file_->append(logline);
+
+    if (file_->writtenBytes() >> 10U >= maxLogSize()) {
         // 当某个文件写满时，重写创建一个文件
         rollFile();
     }
-
-    // 将信息写入缓冲区
-    file_->append(logline, len);
+    else {
+        time_t now = ::time(nullptr);
+        time_t today = now / kDayOfSeconds * kDayOfSeconds;
+        if (today != start_of_time_) {
+            // 每天 0 点滚动日志
+            rollFile();
+        }
+        else if (size_t(now - last_flush_) > flush_interval_) {
+            last_flush_ = now;
+            file_->flush();
+        }
+    }
 }
 
-std::string LogFileManager::getLogFileName()
+std::string LogFileManager::genLogFileName()
 {
     std::string filename;
-    filename.reserve(namePrefix_.size() + 64);
-    filename = namePrefix_;
+    filename.reserve(prefix_.size() + 64);
+    filename.append(prefix_);
 
-    time_point<system_clock, milliseconds> tp = std::chrono::time_point_cast<milliseconds>(system_clock::now());
-    uint64_t milliTime = tp.time_since_epoch().count();
-
-    filename += base::formatTime("_%Y%m%d_%H%M%S.", milliTime / 1000);
-    filename += base::format("%03d", milliTime % 1000);
-    filename += ".log";
+    auto tp = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+    uint64_t milli = tp.time_since_epoch().count();
+    filename.append(fmt::format("_{:%Y%m%d_%H%M%S}.{:03d}", fmt::localtime(milli / 1000), milli % 1000));
+    filename.append(".log");
     return filename;
 }

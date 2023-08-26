@@ -34,5 +34,5 @@ int main(int argc, char* argv[])
 
     std::string dst_;
     halcyon::log::decompress(dst1, dst_);
-    return 1;
+    return 0;
 }
